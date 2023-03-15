@@ -2,6 +2,7 @@ package loader
 
 import (
 	"os"
+	"sort"
 
 	"github.com/pkg/errors"
 	"github.com/projectdiscovery/gologger"
@@ -57,6 +58,10 @@ type Store struct {
 	workflows []*templates.Template
 
 	preprocessor templates.Preprocessor
+
+	// NotFoundCallback is called for each not found template
+	// This overrides error handling for not found templatesss
+	NotFoundCallback func(template string) bool
 }
 
 // NewConfig returns a new loader config
@@ -173,8 +178,10 @@ func init() {
 // ValidateTemplates takes a list of templates and validates them
 // erroring out on discovering any faulty templates.
 func (store *Store) ValidateTemplates() error {
-	templatePaths := store.config.Catalog.GetTemplatesPath(store.finalTemplates)
-	workflowPaths := store.config.Catalog.GetTemplatesPath(store.finalWorkflows)
+	templatePaths, errs := store.config.Catalog.GetTemplatesPath(store.finalTemplates)
+	store.logErroredTemplates(errs)
+	workflowPaths, errs := store.config.Catalog.GetTemplatesPath(store.finalWorkflows)
+	store.logErroredTemplates(errs)
 
 	filteredTemplatePaths := store.pathFilter.Match(templatePaths)
 	filteredWorkflowPaths := store.pathFilter.Match(workflowPaths)
@@ -250,10 +257,10 @@ func areWorkflowTemplatesValid(store *Store, workflows []*workflows.WorkflowTemp
 }
 
 func isParsingError(message string, template string, err error) bool {
-	if err == templates.ErrCreateTemplateExecutor {
+	if errors.Is(err, filter.ErrExcluded) {
 		return false
 	}
-	if err == filter.ErrExcluded {
+	if errors.Is(err, templates.ErrCreateTemplateExecutor) {
 		return false
 	}
 	gologger.Error().Msgf(message, template, err)
@@ -262,34 +269,13 @@ func isParsingError(message string, template string, err error) bool {
 
 // LoadTemplates takes a list of templates and returns paths for them
 func (store *Store) LoadTemplates(templatesList []string) []*templates.Template {
-	includedTemplates := store.config.Catalog.GetTemplatesPath(templatesList)
-	templatePathMap := store.pathFilter.Match(includedTemplates)
-
-	loadedTemplates := make([]*templates.Template, 0, len(templatePathMap))
-	for templatePath := range templatePathMap {
-		loaded, err := parsers.LoadTemplate(templatePath, store.tagFilter, nil, store.config.Catalog)
-		if loaded || store.pathFilter.MatchIncluded(templatePath) {
-			parsed, err := templates.Parse(templatePath, store.preprocessor, store.config.ExecutorOptions)
-			if err != nil {
-				stats.Increment(parsers.RuntimeWarningsStats)
-				gologger.Warning().Msgf("Could not parse template %s: %s\n", templatePath, err)
-			} else if parsed != nil {
-				if len(parsed.RequestsHeadless) > 0 && !store.config.ExecutorOptions.Options.Headless {
-					gologger.Warning().Msgf("Headless flag is required for headless template %s\n", templatePath)
-				} else {
-					loadedTemplates = append(loadedTemplates, parsed)
-				}
-			}
-		} else if err != nil {
-			gologger.Warning().Msgf("Could not load template %s: %s\n", templatePath, err)
-		}
-	}
-	return loadedTemplates
+	return store.LoadTemplatesWithTags(templatesList, nil)
 }
 
 // LoadWorkflows takes a list of workflows and returns paths for them
 func (store *Store) LoadWorkflows(workflowsList []string) []*templates.Template {
-	includedWorkflows := store.config.Catalog.GetTemplatesPath(workflowsList)
+	includedWorkflows, errs := store.config.Catalog.GetTemplatesPath(workflowsList)
+	store.logErroredTemplates(errs)
 	workflowPathMap := store.pathFilter.Match(includedWorkflows)
 
 	loadedWorkflows := make([]*templates.Template, 0, len(workflowPathMap))
@@ -313,7 +299,8 @@ func (store *Store) LoadWorkflows(workflowsList []string) []*templates.Template 
 // LoadTemplatesWithTags takes a list of templates and extra tags
 // returning templates that match.
 func (store *Store) LoadTemplatesWithTags(templatesList, tags []string) []*templates.Template {
-	includedTemplates := store.config.Catalog.GetTemplatesPath(templatesList)
+	includedTemplates, errs := store.config.Catalog.GetTemplatesPath(templatesList)
+	store.logErroredTemplates(errs)
 	templatePathMap := store.pathFilter.Match(includedTemplates)
 
 	loadedTemplates := make([]*templates.Template, 0, len(templatePathMap))
@@ -322,7 +309,10 @@ func (store *Store) LoadTemplatesWithTags(templatesList, tags []string) []*templ
 		if loaded || store.pathFilter.MatchIncluded(templatePath) {
 			parsed, err := templates.Parse(templatePath, store.preprocessor, store.config.ExecutorOptions)
 			if err != nil {
-				stats.Increment(parsers.RuntimeWarningsStats)
+				// exclude templates not compatible with offline matching from total runtime warning stats
+				if !errors.Is(err, templates.ErrIncompatibleWithOfflineMatching) {
+					stats.Increment(parsers.RuntimeWarningsStats)
+				}
 				gologger.Warning().Msgf("Could not parse template %s: %s\n", templatePath, err)
 			} else if parsed != nil {
 				if len(parsed.RequestsHeadless) > 0 && !store.config.ExecutorOptions.Options.Headless {
@@ -335,5 +325,57 @@ func (store *Store) LoadTemplatesWithTags(templatesList, tags []string) []*templ
 			gologger.Warning().Msgf("Could not load template %s: %s\n", templatePath, err)
 		}
 	}
+
+	sort.SliceStable(loadedTemplates, func(i, j int) bool {
+		return loadedTemplates[i].Path < loadedTemplates[j].Path
+	})
+
 	return loadedTemplates
+}
+
+// IsHTTPBasedProtocolUsed returns true if http/headless protocol is being used for
+// any templates.
+func IsHTTPBasedProtocolUsed(store *Store) bool {
+	templates := append(store.Templates(), store.Workflows()...)
+
+	for _, template := range templates {
+		if len(template.RequestsHTTP) > 0 || len(template.RequestsHeadless) > 0 {
+			return true
+		}
+		if len(template.Workflows) > 0 {
+			if workflowContainsProtocol(template.Workflows) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func workflowContainsProtocol(workflow []*workflows.WorkflowTemplate) bool {
+	for _, workflow := range workflow {
+		for _, template := range workflow.Matchers {
+			if workflowContainsProtocol(template.Subtemplates) {
+				return true
+			}
+		}
+		for _, template := range workflow.Subtemplates {
+			if workflowContainsProtocol(template.Subtemplates) {
+				return true
+			}
+		}
+		for _, executer := range workflow.Executers {
+			if executer.TemplateType == templateTypes.HTTPProtocol || executer.TemplateType == templateTypes.HeadlessProtocol {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (s *Store) logErroredTemplates(erred map[string]error) {
+	for template, err := range erred {
+		if s.NotFoundCallback == nil || !s.NotFoundCallback(template) {
+			gologger.Error().Msgf("Could not find template '%s': %s", template, err)
+		}
+	}
 }

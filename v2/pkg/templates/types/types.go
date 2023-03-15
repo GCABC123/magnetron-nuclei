@@ -24,6 +24,7 @@ const (
 	FileProtocol
 	// name:http
 	HTTPProtocol
+	OfflineHTTPProtocol
 	// name:headless
 	HeadlessProtocol
 	// name:network
@@ -123,7 +124,7 @@ func (holder TypeHolder) MarshalYAML() (interface{}, error) {
 type ProtocolTypes []ProtocolType
 
 func (protocolTypes *ProtocolTypes) Set(values string) error {
-	inputTypes, err := goflags.ToFileNormalizedStringSlice(values)
+	inputTypes, err := goflags.ToStringSlice(values, goflags.FileNormalizedStringSliceOptions)
 	if err != nil {
 		return err
 	}
@@ -153,10 +154,22 @@ func (protocolTypes *ProtocolTypes) UnmarshalYAML(unmarshal func(interface{}) er
 	return nil
 }
 
+func (protocolTypes ProtocolTypes) MarshalJSON() ([]byte, error) {
+	var stringProtocols = make([]string, 0, len(protocolTypes))
+	for _, protocol := range protocolTypes {
+		stringProtocols = append(stringProtocols, protocol.String())
+	}
+	return json.Marshal(stringProtocols)
+}
+
 func (protocolTypes ProtocolTypes) String() string {
 	var stringTypes []string
 	for _, t := range protocolTypes {
-		stringTypes = append(stringTypes, t.String())
+		protocolMapping := t.String()
+		if protocolMapping != "" {
+			stringTypes = append(stringTypes, protocolMapping)
+		}
+
 	}
 	return strings.Join(stringTypes, ", ")
 }

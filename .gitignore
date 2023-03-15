@@ -1,6 +1,7 @@
 .idea
 .vscode
 v2/vendor
+v2/dist
 integration_tests/nuclei
 integration_tests/integration-test
 v2/cmd/nuclei/main
@@ -13,4 +14,5 @@ v2/cmd/docgen/docgen
 v2/pkg/protocols/common/helpers/deserialization/testdata/Deserialize.class
 v2/pkg/protocols/common/helpers/deserialization/testdata/ValueObject.class
 v2/pkg/protocols/common/helpers/deserialization/testdata/ValueObject2.ser
-.vscode
+*.exe
+

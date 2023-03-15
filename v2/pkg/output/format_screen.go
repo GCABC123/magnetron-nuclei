@@ -12,7 +12,7 @@ func (w *StandardWriter) formatScreen(output *ResultEvent) []byte {
 	builder := &bytes.Buffer{}
 
 	if !w.noMetadata {
-		if !w.noTimestamp {
+		if w.timestamp {
 			builder.WriteRune('[')
 			builder.WriteString(w.aurora.Cyan(output.Timestamp.Format("2006-01-02 15:04:05")).String())
 			builder.WriteString("] ")
@@ -91,7 +91,7 @@ func (w *StandardWriter) formatScreen(output *ResultEvent) []byte {
 
 			builder.WriteString(w.aurora.BrightYellow(name).String())
 			builder.WriteRune('=')
-			builder.WriteString(w.aurora.BrightYellow(types.ToString(value)).String())
+			builder.WriteString(w.aurora.BrightYellow(strconv.QuoteToASCII(types.ToString(value))).String())
 		}
 		builder.WriteString("]")
 	}

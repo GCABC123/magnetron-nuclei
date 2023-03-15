@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -35,9 +36,31 @@ var (
 		"offlineHttp":     offlineHttpTestcases,
 		"customConfigDir": customConfigDirTestCases,
 	}
+
+	// For debug purposes
+	runProtocol = ""
+	runTemplate = ""
+	extraArgs   = []string{}
 )
 
 func main() {
+	flag.StringVar(&runProtocol, "protocol", "", "run integration tests of given protocol")
+	flag.StringVar(&runTemplate, "template", "", "run integration test of given template")
+	flag.Parse()
+
+	// allows passing extra args to nuclei
+	eargs := os.Getenv("DebugExtraArgs")
+	if eargs != "" {
+		extraArgs = strings.Split(eargs, " ")
+		testutils.ExtraDebugArgs = extraArgs
+	}
+
+	if runProtocol != "" {
+		debug = true
+		debugTests()
+		os.Exit(1)
+	}
+
 	failedTestTemplatePaths := runTests(toMap(toSlice(customTests)))
 
 	if len(failedTestTemplatePaths) > 0 {
@@ -52,6 +75,17 @@ func main() {
 	}
 }
 
+func debugTests() {
+	for tpath, testcase := range protocolTests[runProtocol] {
+		if runTemplate != "" && !strings.Contains(tpath, runTemplate) {
+			continue
+		}
+		if err := testcase.Execute(tpath); err != nil {
+			fmt.Printf("\n%v", err.Error())
+		}
+	}
+}
+
 func runTests(customTemplatePaths map[string]struct{}) map[string]struct{} {
 	failedTestTemplatePaths := map[string]struct{}{}
 
@@ -62,7 +96,7 @@ func runTests(customTemplatePaths map[string]struct{}) map[string]struct{} {
 
 		for templatePath, testCase := range testCases {
 			if len(customTemplatePaths) == 0 || contains(customTemplatePaths, templatePath) {
-				if err, failedTemplatePath := execute(testCase, templatePath); err != nil {
+				if failedTemplatePath, err := execute(testCase, templatePath); err != nil {
 					failedTestTemplatePaths[failedTemplatePath] = struct{}{}
 				}
 			}
@@ -72,14 +106,14 @@ func runTests(customTemplatePaths map[string]struct{}) map[string]struct{} {
 	return failedTestTemplatePaths
 }
 
-func execute(testCase testutils.TestCase, templatePath string) (error, string) {
+func execute(testCase testutils.TestCase, templatePath string) (string, error) {
 	if err := testCase.Execute(templatePath); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%s Test \"%s\" failed: %s\n", failed, templatePath, err)
-		return err, templatePath
+		return templatePath, err
 	}
 
 	fmt.Printf("%s Test \"%s\" passed!\n", success, templatePath)
-	return nil, ""
+	return "", nil
 }
 
 func expectResultsCount(results []string, expectedNumber int) error {

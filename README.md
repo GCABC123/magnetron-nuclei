@@ -73,7 +73,7 @@ PROMOTIONAL MATERIAL FOR 𝗔𝗥𝗧𝗜𝗙𝗜𝗖𝗜𝗔𝗟 𝗜𝗡𝗧�
   <a href="#how-it-works">How</a> •
   <a href="#install-nuclei">Install</a> •
   <a href="#for-security-engineers">For Security Engineers</a> •
-  <a href="#for-developers-and-organisations">For Developers</a> •
+  <a href="#for-developers-and-organizations">For Developers</a> •
   <a href="https://nuclei.projectdiscovery.io/nuclei/get-started/">Documentation</a> •
   <a href="#credits">Credits</a> •
   <a href="https://nuclei.projectdiscovery.io/faq/nuclei/">FAQs</a> •
@@ -83,7 +83,8 @@ PROMOTIONAL MATERIAL FOR 𝗔𝗥𝗧𝗜𝗙𝗜𝗖𝗜𝗔𝗟 𝗜𝗡𝗧�
 <p align="center">
   <a href="https://github.com/projectdiscovery/nuclei/blob/master/README.md">English</a> •
   <a href="https://github.com/projectdiscovery/nuclei/blob/master/README_CN.md">中文</a> •
-  <a href="https://github.com/projectdiscovery/nuclei/blob/master/README_KR.md">Korean</a>
+  <a href="https://github.com/projectdiscovery/nuclei/blob/master/README_KR.md">Korean</a> •
+  <a href="https://github.com/projectdiscovery/nuclei/blob/master/README_ID.md">Indonesia</a>
 </p>
 
 ---
@@ -104,11 +105,28 @@ We have a [dedicated repository](https://github.com/projectdiscovery/nuclei-temp
 
 # Install Nuclei
 
-Nuclei requires **go1.17** to install successfully. Run the following command to install the latest version -
+Nuclei requires **go1.19** to install successfully. Run the following command to install the latest version -
 
 ```sh
 go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest
 ```
+
+<details>
+  <summary>Brew</summary>
+  
+  ```sh
+  brew install nuclei
+  ```
+  
+</details>
+<details>
+  <summary>Docker</summary>
+  
+  ```sh
+  docker pull projectdiscovery/nuclei:latest
+  ```
+  
+</details>
 
 **More installation [methods can be found here](https://nuclei.projectdiscovery.io/nuclei/get-started/).**
 
@@ -142,13 +160,15 @@ Nuclei is a fast, template based vulnerability scanner focusing
 on extensive configurability, massive extensibility and ease of use.
 
 Usage:
-  nuclei [flags]
+  ./nuclei [flags]
 
 Flags:
 TARGET:
-   -u, -target string[]  target URLs/hosts to scan
-   -l, -list string      path to file containing a list of target URLs/hosts to scan (one per line)
-   -resume string        Resume scan using resume.cfg (clustering will be disabled)
+   -u, -target string[]       target URLs/hosts to scan
+   -l, -list string           path to file containing a list of target URLs/hosts to scan (one per line)
+   -resume string             resume scan using resume.cfg (clustering will be disabled)
+   -sa, -scan-all-ips         scan all the IP's associated with dns record
+   -iv, -ip-version string[]  IP version to scan of hostname (4,6) - (default 4)
 
 TEMPLATES:
    -nt, -new-templates                    run only new templates added in latest nuclei-templates release
@@ -159,7 +179,8 @@ TEMPLATES:
    -w, -workflows string[]                list of workflow or workflow directory to run (comma-separated, file)
    -wu, -workflow-url string[]            list of workflow urls to run (comma-separated, file)
    -validate                              validate the passed templates to nuclei
-   -nss, -no-strict-syntax                Disable strict syntax check on templates
+   -nss, -no-strict-syntax                disable strict syntax check on templates
+   -td, -template-display                 displays the templates content
    -tl                                    list all available templates
 
 FILTERING:
@@ -187,33 +208,40 @@ OUTPUT:
    -json                         write output in JSONL(ines) format
    -irr, -include-rr             include request/response pairs in the JSONL output (for findings only)
    -nm, -no-meta                 disable printing result metadata in cli output
-   -nts, -no-timestamp           disable printing timestamp in cli output
+   -ts, -timestamp               enables printing timestamp in cli output
    -rdb, -report-db string       nuclei reporting database (always use this to persist report data)
    -ms, -matcher-status          display match failure status
    -me, -markdown-export string  directory to export results in markdown format
    -se, -sarif-export string     file to export results in SARIF format
 
 CONFIGURATIONS:
-   -config string              path to the nuclei configuration file
-   -fr, -follow-redirects      enable following redirects for http templates
-   -mr, -max-redirects int     max number of redirects to follow for http templates (default 10)
-   -dr, -disable-redirects     disable redirects for http templates
-   -rc, -report-config string  nuclei reporting module configuration file
-   -H, -header string[]        custom header/cookie to include in all http request in header:value format (cli, file)
-   -V, -var value              custom vars in key=value format
-   -r, -resolvers string       file containing resolver list for nuclei
-   -sr, -system-resolvers      use system DNS resolving as error fallback
-   -passive                    enable passive HTTP response processing mode
-   -ev, -env-vars              enable environment variables to be used in template
-   -cc, -client-cert string    client certificate file (PEM-encoded) used for authenticating against scanned hosts
-   -ck, -client-key string     client key file (PEM-encoded) used for authenticating against scanned hosts
-   -ca, -client-ca string      client certificate authority file (PEM-encoded) used for authenticating against scanned hosts
-   -sml, -show-match-line      show match lines for file templates, works with extractors only
-   -ztls                       use ztls library with autofallback to standard one for tls13
-   -sni string                 tls sni hostname to use (default: input domain name)
-   -i, -interface string       network interface to use for network scan
-   -sip, -source-ip string     source ip address to use for network scan
-   -config-directory string    Override the default config path ($home/.config)
+   -config string                 path to the nuclei configuration file
+   -fr, -follow-redirects         enable following redirects for http templates
+   -fhr, -follow-host-redirects   follow redirects on the same host
+   -mr, -max-redirects int        max number of redirects to follow for http templates (default 10)
+   -dr, -disable-redirects        disable redirects for http templates
+   -rc, -report-config string     nuclei reporting module configuration file
+   -H, -header string[]           custom header/cookie to include in all http request in header:value format (cli, file)
+   -V, -var value                 custom vars in key=value format
+   -r, -resolvers string          file containing resolver list for nuclei
+   -sr, -system-resolvers         use system DNS resolving as error fallback
+   -dc, -disable-clustering       disable clustering of requests
+   -passive                       enable passive HTTP response processing mode
+   -fh2, -force-http2             force http2 connection on requests
+   -ev, -env-vars                 enable environment variables to be used in template
+   -cc, -client-cert string       client certificate file (PEM-encoded) used for authenticating against scanned hosts
+   -ck, -client-key string        client key file (PEM-encoded) used for authenticating against scanned hosts
+   -ca, -client-ca string         client certificate authority file (PEM-encoded) used for authenticating against scanned hosts
+   -sml, -show-match-line         show match lines for file templates, works with extractors only
+   -ztls                          use ztls library with autofallback to standard one for tls13
+   -sni string                    tls sni hostname to use (default: input domain name)
+   -sandbox                       sandbox nuclei for safe templates execution
+   -i, -interface string          network interface to use for network scan
+   -at, -attack-type string       type of payload combinations to perform (batteringram,pitchfork,clusterbomb)
+   -sip, -source-ip string        source ip address to use for network scan
+   -config-directory string       override the default config path ($home/.config)
+   -rsr, -response-size-read int  max response size to read in bytes (default 10485760)
+   -rss, -response-size-save int  max response size to read in bytes (default 1048576)
 
 INTERACTSH:
    -iserver, -interactsh-server string  interactsh server url for self-hosted instance (default: oast.pro,oast.live,oast.site,oast.online,oast.fun,oast.me)
@@ -224,6 +252,14 @@ INTERACTSH:
    -interactions-cooldown-period int    extra time for interaction polling before exiting (default 5)
    -ni, -no-interactsh                  disable interactsh server for OAST testing, exclude OAST based templates
 
+UNCOVER:
+   -uc, -uncover                  enable uncover engine
+   -uq, -uncover-query string[]   uncover search query
+   -ue, -uncover-engine string[]  uncover search engine (shodan,shodan-idb,fofa,censys,quake,hunter,zoomeye,netlas) (default shodan)
+   -uf, -uncover-field string     uncover fields to return (ip,port,host) (default "ip:port")
+   -ul, -uncover-limit int        uncover results to return (default 100)
+   -ucd, -uncover-delay int       delay between uncover query requests in seconds (0 to disable) (default 1)
+
 RATE-LIMIT:
    -rl, -rate-limit int               maximum number of requests to send per second (default 150)
    -rlm, -rate-limit-minute int       maximum number of requests to send per minute
@@ -233,22 +269,25 @@ RATE-LIMIT:
    -headc, -headless-concurrency int  maximum number of headless templates to be executed in parallel (default 10)
 
 OPTIMIZATIONS:
-   -timeout int                        time to wait in seconds before timeout (default 5)
+   -timeout int                        time to wait in seconds before timeout (default 10)
    -retries int                        number of times to retry a failed request (default 1)
-   -ldp, -leave-default-ports          leave default HTTP/HTTPS ports (eg. host:80,host:443
+   -ldp, -leave-default-ports          leave default HTTP/HTTPS ports (eg. host:80,host:443)
    -mhe, -max-host-error int           max errors for a host before skipping from scan (default 30)
+   -nmhe, -no-mhe                      disable skipping host from scan based on errors
    -project                            use a project folder to avoid sending same request multiple times
-   -project-path string                set a specific project path
-   -spm, -stop-at-first-path           stop processing HTTP requests after the first match (may break template/workflow logic)
+   -project-path string                set a specific project path (default "/tmp")
+   -spm, -stop-at-first-match          stop processing HTTP requests after the first match (may break template/workflow logic)
    -stream                             stream mode - start elaborating without sorting the input
+   -ss, -scan-strategy value           strategy to use while scanning(auto/host-spray/template-spray) (default 0)
    -irt, -input-read-timeout duration  timeout on input read (default 3m0s)
-   -no-stdin                           Disable Stdin processing
+   -nh, -no-httpx                      disable httpx probing for non-url input
+   -no-stdin                           disable stdin processing
 
 HEADLESS:
-   -headless                    enable templates that require headless browser support (root user on linux will disable sandbox)
+   -headless                    enable templates that require headless browser support (root user on Linux will disable sandbox)
    -page-timeout int            seconds to wait for each page in headless mode (default 20)
    -sb, -show-browser           show the browser on the screen when running templates with headless mode
-   -sc, -system-chrome          Use local installed chrome browser instead of nuclei installed
+   -sc, -system-chrome          use local installed Chrome browser instead of nuclei installed
    -lha, -list-headless-action  list available headless actions
 
 DEBUG:
@@ -257,6 +296,7 @@ DEBUG:
    -dresp, -debug-resp       show all received responses
    -p, -proxy string[]       list of http/socks5 proxy to use (comma separated or file input)
    -pi, -proxy-internal      proxy all internal requests
+   -ldf, -list-dsl-function  list all supported DSL function signatures
    -tlog, -trace-log string  file to write sent requests trace log
    -elog, -error-log string  file to write sent requests error log
    -version                  show nuclei version
@@ -264,15 +304,16 @@ DEBUG:
    -v, -verbose              show verbose output
    -profile-mem string       optional nuclei memory profile dump file
    -vv                       display templates loaded for scan
+   -svd, -show-var-dump      show variables dump for debugging
    -ep, -enable-pprof        enable pprof debugging server
    -tv, -templates-version   shows the version of the installed nuclei-templates
    -hc, -health-check        run diagnostic check up
 
 UPDATE:
-   -update                        update nuclei engine to the latest released version
-   -ut, -update-templates         update nuclei-templates to latest released version
-   -ud, -update-directory string  overwrite the default directory to install nuclei-templates
-   -duc, -disable-update-check    disable automatic nuclei/templates update check
+   -un, -update                      update nuclei engine to the latest released version
+   -ut, -update-templates            update nuclei-templates to latest released version
+   -ud, -update-template-dir string  custom directory to install / update nuclei-templates
+   -duc, -disable-update-check       disable automatic nuclei/templates update check
 
 STATISTICS:
    -stats                    display statistics about the running scan
@@ -280,6 +321,29 @@ STATISTICS:
    -si, -stats-interval int  number of seconds to wait between showing a statistics update (default 5)
    -m, -metrics              expose nuclei metrics on a port
    -mp, -metrics-port int    port to expose nuclei metrics on (default 9092)
+
+CLOUD:
+   -cloud                              run scan on nuclei cloud
+   -ads, -add-datasource string        add specified data source (s3,github)
+   -atr, -add-target string            add target(s) to cloud
+   -atm, -add-template string          add template(s) to cloud
+   -lsn, -list-scan                    list previous cloud scans
+   -lso, -list-output string           list scan output by scan id
+   -ltr, -list-target                  list cloud target by id
+   -ltm, -list-template                list cloud template by id
+   -lds, -list-datasource              list cloud datasource by id
+   -lrs, -list-reportsource            list reporting sources
+   -dsn, -delete-scan string           delete cloud scan by id
+   -dtr, -delete-target string         delete target(s) from cloud
+   -dtm, -delete-template string       delete template(s) from cloud
+   -dds, -delete-datasource string     delete specified data source
+   -drs, -disable-reportsource string  disable specified reporting source
+   -ers, -enable-reportsource string   enable specified reporting source
+   -gtr, -get-target string            get target content by id
+   -gtm, -get-template string          get template content by id
+   -nos, -no-store                     disable scan/output storage on cloud
+   -no-tables                          do not display pretty-printed tables
+   -limit int                          limit the number of output to display (default 100)
 ```
 
 ### Running Nuclei
@@ -309,7 +373,7 @@ http://uat.example.com
 
 # For Security Engineers
 
-Nuclei offers great number of features that are helpful for security engineers to customise workflow in their organisation. With the varieties of scan capabilities (like DNS, HTTP, TCP), security engineers can easily create their suite of custom checks with Nuclei.
+Nuclei offers great number of features that are helpful for security engineers to customise workflow in their organization. With the varieties of scan capabilities (like DNS, HTTP, TCP), security engineers can easily create their suite of custom checks with Nuclei.
 
 - Varieties of protocols supported: TCP, DNS, HTTP, File, etc
 - Achieve complex vulnerability steps with workflows and [dynamic requests.](https://blog.projectdiscovery.io/nuclei-unleashed-quickly-write-complex-exploits/)
@@ -356,14 +420,14 @@ Pen-testers get the full power of our public templates and customization capabil
 </table>
 
 
-# For Developers and Organisations
+# For Developers and Organizations
 
 Nuclei is built with simplicity in mind, with the community backed templates by hundreds of security researchers, it allows you to stay updated with the latest security threats using continuous Nuclei scanning on the hosts. It is designed to be easily integrated into regression tests cycle, to verify the fixes and eliminate vulnerabilities from occurring in the future.
 
 - **CI/CD:** Engineers are already utilising Nuclei within their CI/CD pipeline, it allows them to constantly monitor their staging and production environments with customised templates.
 - **Continuous Regression Cycle:** With Nuclei, you can create your custom template on every new identified vulnerability and put into Nuclei engine to eliminate in the continuous regression cycle.
 
-We have [a discussion thread around this](https://github.com/projectdiscovery/nuclei-templates/discussions/693), there are already some bug bounty programs giving incentives to hackers on writing nuclei templates with every submission, that helps them to eliminate the vulnerability across all their assets, as well as to eliminate future risk in reappearing on productions. If you're interested in implementing it in your organisation, feel free to [reach out to us](mailto:contact@projectdiscovery.io). We will be more than happy to help you in the getting started process, or you can also post into the [discussion thread for any help](https://github.com/projectdiscovery/nuclei-templates/discussions/693).
+We have [a discussion thread around this](https://github.com/projectdiscovery/nuclei-templates/discussions/693), there are already some bug bounty programs giving incentives to hackers on writing nuclei templates with every submission, that helps them to eliminate the vulnerability across all their assets, as well as to eliminate future risk in reappearing on productions. If you're interested in implementing it in your organization, feel free to [reach out to us](mailto:contact@projectdiscovery.io). We will be more than happy to help you in the getting started process, or you can also post into the [discussion thread for any help](https://github.com/projectdiscovery/nuclei-templates/discussions/693).
 
 <h3 align="center">
   <img src="static/regression-with-nuclei.jpg" alt="regression-cycle-with-nuclei" width="1100px"></a>
@@ -372,6 +436,11 @@ We have [a discussion thread around this](https://github.com/projectdiscovery/nu
 <h1 align="left">
   <a href="https://github.com/projectdiscovery/nuclei-action"><img src="static/learn-more-button.png" width="170px" alt="Learn More"></a>
 </h1>
+
+### Using Nuclei From Go Code
+
+Examples of using Nuclei From Go Code to run templates on targets are provided in the [examples](v2/examples/) folder.
+
 
 ### Resources
 
@@ -389,7 +458,18 @@ We have [a discussion thread around this](https://github.com/projectdiscovery/nu
 
 ### Credits
 
-Thanks to all the amazing community [contributors for sending PRs](https://github.com/projectdiscovery/nuclei/graphs/contributors). Do also check out the below similar open-source projects that may fit in your workflow:
+Thanks to all the amazing [community contributors for sending PRs](https://github.com/projectdiscovery/nuclei/graphs/contributors) and keeping this project updated. :heart:
+
+If you have an idea or some kind of improvement, you are welcome to contribute and participate in the Project, feel free to send your PR.
+
+<p align="center">
+<a href="https://github.com/projectdiscovery/nuclei/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=projectdiscovery/nuclei&max=500">
+</a>
+</p>
+
+
+Do also check out the below similar open-source projects that may fit in your workflow:
 
 [FFuF](https://github.com/ffuf/ffuf), [Qsfuzz](https://github.com/ameenmaali/qsfuzz), [Inception](https://github.com/proabiral/inception), [Snallygaster](https://github.com/hannob/snallygaster), [Gofingerprint](https://github.com/Static-Flow/gofingerprint), [Sn1per](https://github.com/1N3/Sn1per/tree/master/templates), [Google tsunami](https://github.com/google/tsunami-security-scanner), [Jaeles](https://github.com/jaeles-project/jaeles), [ChopChop](https://github.com/michelin/ChopChop)
 

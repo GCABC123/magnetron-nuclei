@@ -2,6 +2,7 @@ package templates
 
 import (
 	"fmt"
+	"io"
 	"reflect"
 
 	"github.com/pkg/errors"
@@ -13,11 +14,13 @@ import (
 	"github.com/projectdiscovery/nuclei/v2/pkg/protocols/offlinehttp"
 	"github.com/projectdiscovery/nuclei/v2/pkg/templates/cache"
 	"github.com/projectdiscovery/nuclei/v2/pkg/utils"
-	"github.com/projectdiscovery/stringsutil"
+	"github.com/projectdiscovery/retryablehttp-go"
+	stringsutil "github.com/projectdiscovery/utils/strings"
 )
 
 var (
-	ErrCreateTemplateExecutor = errors.New("cannot create template executer")
+	ErrCreateTemplateExecutor          = errors.New("cannot create template executer")
+	ErrIncompatibleWithOfflineMatching = errors.New("template can't be used for offline matching")
 )
 
 var parsedTemplatesCache *cache.Templates
@@ -27,51 +30,36 @@ func init() {
 }
 
 // Parse parses a yaml request template file
-//nolint:gocritic // this cannot be passed by pointer
 // TODO make sure reading from the disk the template parsing happens once: see parsers.ParseTemplate vs templates.Parse
+//
+//nolint:gocritic // this cannot be passed by pointer
 func Parse(filePath string, preprocessor Preprocessor, options protocols.ExecuterOptions) (*Template, error) {
 	if value, err := parsedTemplatesCache.Has(filePath); value != nil {
 		return value.(*Template), err
 	}
 
-	template := &Template{}
-
-	data, err := utils.ReadFromPathOrURL(filePath, options.Catalog)
+	var reader io.ReadCloser
+	if utils.IsURL(filePath) {
+		//todo:instead of creating a new client each time, a default one should be reused (same as the standard library)
+		// use retryablehttp (tls verification is enabled by default in the standard library)
+		resp, err := retryablehttp.DefaultClient().Get(filePath)
+		if err != nil {
+			return nil, err
+		}
+		reader = resp.Body
+	} else {
+		var err error
+		reader, err = options.Catalog.OpenFile(filePath)
+		if err != nil {
+			return nil, err
+		}
+	}
+	defer reader.Close()
+	options.TemplatePath = filePath
+	template, err := ParseTemplateFromReader(reader, preprocessor, options)
 	if err != nil {
 		return nil, err
 	}
-
-	data = template.expandPreprocessors(data)
-	if preprocessor != nil {
-		data = preprocessor.Process(data)
-	}
-
-	if err := yaml.Unmarshal(data, template); err != nil {
-		return nil, err
-	}
-
-	if utils.IsBlank(template.Info.Name) {
-		return nil, errors.New("no template name field provided")
-	}
-	if template.Info.Authors.IsEmpty() {
-		return nil, errors.New("no template author field provided")
-	}
-
-	// Setting up variables regarding template metadata
-	options.TemplateID = template.ID
-	options.TemplateInfo = template.Info
-	options.TemplatePath = filePath
-	options.StopAtFirstMatch = template.StopAtFirstMatch
-
-	if template.Variables.Len() > 0 {
-		options.Variables = template.Variables
-	}
-
-	// If no requests, and it is also not a workflow, return error.
-	if template.Requests() == 0 {
-		return nil, fmt.Errorf("no requests defined for %s", template.ID)
-	}
-
 	// Compile the workflow request
 	if len(template.Workflows) > 0 {
 		compiled := &template.Workflow
@@ -80,24 +68,7 @@ func Parse(filePath string, preprocessor Preprocessor, options protocols.Execute
 		template.CompiledWorkflow = compiled
 		template.CompiledWorkflow.Options = &options
 	}
-
-	if err := template.compileProtocolRequests(options); err != nil {
-		return nil, err
-	}
-
-	if template.Executer != nil {
-		if err := template.Executer.Compile(); err != nil {
-			return nil, errors.Wrap(err, "could not compile request")
-		}
-		template.TotalRequests = template.Executer.Requests()
-	}
-	if template.Executer == nil && template.CompiledWorkflow == nil {
-		return nil, ErrCreateTemplateExecutor
-	}
 	template.Path = filePath
-
-	template.parseSelfContainedRequests()
-
 	parsedTemplatesCache.Store(filePath, template, err)
 	return template, nil
 }
@@ -142,35 +113,34 @@ func (template *Template) compileProtocolRequests(options protocols.ExecuterOpti
 	}
 
 	if options.Options.OfflineHTTP {
-		template.compileOfflineHTTPRequest(options)
-		return nil
+		return template.compileOfflineHTTPRequest(options)
 	}
 
 	var requests []protocols.Request
-	switch {
-	case len(template.RequestsDNS) > 0:
-		requests = template.convertRequestToProtocolsRequest(template.RequestsDNS)
 
-	case len(template.RequestsFile) > 0:
-		requests = template.convertRequestToProtocolsRequest(template.RequestsFile)
-
-	case len(template.RequestsNetwork) > 0:
-		requests = template.convertRequestToProtocolsRequest(template.RequestsNetwork)
-
-	case len(template.RequestsHTTP) > 0:
-		requests = template.convertRequestToProtocolsRequest(template.RequestsHTTP)
-
-	case len(template.RequestsHeadless) > 0 && options.Options.Headless:
-		requests = template.convertRequestToProtocolsRequest(template.RequestsHeadless)
-
-	case len(template.RequestsSSL) > 0:
-		requests = template.convertRequestToProtocolsRequest(template.RequestsSSL)
-
-	case len(template.RequestsWebsocket) > 0:
-		requests = template.convertRequestToProtocolsRequest(template.RequestsWebsocket)
-
-	case len(template.RequestsWHOIS) > 0:
-		requests = template.convertRequestToProtocolsRequest(template.RequestsWHOIS)
+	if len(template.RequestsDNS) > 0 {
+		requests = append(requests, template.convertRequestToProtocolsRequest(template.RequestsDNS)...)
+	}
+	if len(template.RequestsFile) > 0 {
+		requests = append(requests, template.convertRequestToProtocolsRequest(template.RequestsFile)...)
+	}
+	if len(template.RequestsNetwork) > 0 {
+		requests = append(requests, template.convertRequestToProtocolsRequest(template.RequestsNetwork)...)
+	}
+	if len(template.RequestsHTTP) > 0 {
+		requests = append(requests, template.convertRequestToProtocolsRequest(template.RequestsHTTP)...)
+	}
+	if len(template.RequestsHeadless) > 0 && options.Options.Headless {
+		requests = append(requests, template.convertRequestToProtocolsRequest(template.RequestsHeadless)...)
+	}
+	if len(template.RequestsSSL) > 0 {
+		requests = append(requests, template.convertRequestToProtocolsRequest(template.RequestsSSL)...)
+	}
+	if len(template.RequestsWebsocket) > 0 {
+		requests = append(requests, template.convertRequestToProtocolsRequest(template.RequestsWebsocket)...)
+	}
+	if len(template.RequestsWHOIS) > 0 {
+		requests = append(requests, template.convertRequestToProtocolsRequest(template.RequestsWHOIS)...)
 	}
 	template.Executer = executer.NewExecuter(requests, &options)
 	return nil
@@ -198,7 +168,7 @@ func (template *Template) convertRequestToProtocolsRequest(requests interface{})
 // compileOfflineHTTPRequest iterates all requests if offline http mode is
 // specified and collects all matchers for all the base request templates
 // (those with URL {{BaseURL}} and it's slash variation.)
-func (template *Template) compileOfflineHTTPRequest(options protocols.ExecuterOptions) {
+func (template *Template) compileOfflineHTTPRequest(options protocols.ExecuterOptions) error {
 	operatorsList := []*operators.Operators{}
 
 mainLoop:
@@ -218,5 +188,65 @@ mainLoop:
 	if len(operatorsList) > 0 {
 		options.Operators = operatorsList
 		template.Executer = executer.NewExecuter([]protocols.Request{&offlinehttp.Request{}}, &options)
+		return nil
 	}
+
+	return ErrIncompatibleWithOfflineMatching
+}
+
+// ParseTemplateFromReader reads the template from reader
+// returns the parsed template
+func ParseTemplateFromReader(reader io.Reader, preprocessor Preprocessor, options protocols.ExecuterOptions) (*Template, error) {
+	template := &Template{}
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, err
+	}
+
+	data = template.expandPreprocessors(data)
+	if preprocessor != nil {
+		data = preprocessor.Process(data)
+	}
+
+	if err := yaml.Unmarshal(data, template); err != nil {
+		return nil, err
+	}
+
+	if utils.IsBlank(template.Info.Name) {
+		return nil, errors.New("no template name field provided")
+	}
+	if template.Info.Authors.IsEmpty() {
+		return nil, errors.New("no template author field provided")
+	}
+
+	// Setting up variables regarding template metadata
+	options.TemplateID = template.ID
+	options.TemplateInfo = template.Info
+	options.StopAtFirstMatch = template.StopAtFirstMatch
+
+	if template.Variables.Len() > 0 {
+		options.Variables = template.Variables
+	}
+
+	// If no requests, and it is also not a workflow, return error.
+	if template.Requests() == 0 {
+		return nil, fmt.Errorf("no requests defined for %s", template.ID)
+	}
+
+	if err := template.compileProtocolRequests(options); err != nil {
+		return nil, err
+	}
+
+	if template.Executer != nil {
+		if err := template.Executer.Compile(); err != nil {
+			return nil, errors.Wrap(err, "could not compile request")
+		}
+		template.TotalRequests = template.Executer.Requests()
+	}
+	if template.Executer == nil && template.CompiledWorkflow == nil {
+		return nil, ErrCreateTemplateExecutor
+	}
+	template.parseSelfContainedRequests()
+
+	return template, nil
 }

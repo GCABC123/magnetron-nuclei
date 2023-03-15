@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectdiscovery/fileutil"
 	"github.com/projectdiscovery/gologger"
 	"github.com/projectdiscovery/nuclei/v2/pkg/types"
+	fileutil "github.com/projectdiscovery/utils/file"
 )
 
 var proxyURLList []url.URL
@@ -84,6 +84,8 @@ func runProxyConnectivity(proxyURL url.URL, options *types.Options, done chan bo
 			assignProxyURL(proxyURL, options)
 			done <- true
 		}
+	} else {
+		gologger.Debug().Msgf("Proxy validation failed for '%s': %s", proxyURL.String(), err)
 	}
 	exitCounter <- true
 }

@@ -3,6 +3,7 @@ package operators
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/pkg/errors"
 
@@ -10,7 +11,7 @@ import (
 	"github.com/projectdiscovery/nuclei/v2/pkg/operators/matchers"
 	"github.com/projectdiscovery/nuclei/v2/pkg/protocols/common/generators"
 	"github.com/projectdiscovery/nuclei/v2/pkg/protocols/common/utils/excludematchers"
-	"github.com/projectdiscovery/sliceutil"
+	sliceutil "github.com/projectdiscovery/utils/slice"
 )
 
 // Operators contains the operators that can be applied on protocols
@@ -37,9 +38,9 @@ type Operators struct {
 	matchersCondition matchers.ConditionType
 
 	// TemplateID is the ID of the template for matcher
-	TemplateID string
+	TemplateID string `json:"-" yaml:"-" jsonschema:"-"`
 	// ExcludeMatchers is a list of excludeMatchers items
-	ExcludeMatchers *excludematchers.ExcludeMatchers
+	ExcludeMatchers *excludematchers.ExcludeMatchers `json:"-" yaml:"-" jsonschema:"-"`
 }
 
 // Compile compiles the operators as well as their corresponding matchers and extractors
@@ -89,6 +90,23 @@ type Result struct {
 
 	// Optional lineCounts for file protocol
 	LineCount string
+}
+
+func (result *Result) HasMatch(name string) bool {
+	return result.hasItem(name, result.Matches)
+}
+
+func (result *Result) HasExtract(name string) bool {
+	return result.hasItem(name, result.Extracts)
+}
+
+func (result *Result) hasItem(name string, m map[string][]string) bool {
+	for matchName := range m {
+		if strings.EqualFold(name, matchName) {
+			return true
+		}
+	}
+	return false
 }
 
 // MakeDynamicValuesCallback takes an input dynamic values map and calls
@@ -310,4 +328,14 @@ func (operators *Operators) ExecuteInternalExtractors(data map[string]interface{
 		}
 	}
 	return dynamicValues
+}
+
+// IsEmpty determines if the operator has matchers or extractors
+func (operators *Operators) IsEmpty() bool {
+	return operators.Len() == 0
+}
+
+// Len calculates the sum of the number of matchers and extractors
+func (operators *Operators) Len() int {
+	return len(operators.Matchers) + len(operators.Extractors)
 }

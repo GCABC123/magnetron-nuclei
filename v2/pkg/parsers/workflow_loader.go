@@ -16,13 +16,16 @@ type workflowLoader struct {
 // NewLoader returns a new workflow loader structure
 func NewLoader(options *protocols.ExecuterOptions) (model.WorkflowLoader, error) {
 	tagFilter, err := filter.New(&filter.Config{
+		Authors:           options.Options.Authors,
 		Tags:              options.Options.Tags,
 		ExcludeTags:       options.Options.ExcludeTags,
-		Authors:           options.Options.Authors,
-		Severities:        options.Options.Severities,
 		IncludeTags:       options.Options.IncludeTags,
 		IncludeIds:        options.Options.IncludeIds,
 		ExcludeIds:        options.Options.ExcludeIds,
+		Severities:        options.Options.Severities,
+		ExcludeSeverities: options.Options.ExcludeSeverities,
+		Protocols:         options.Options.Protocols,
+		ExcludeProtocols:  options.Options.ExcludeProtocols,
 		IncludeConditions: options.Options.IncludeConditions,
 	})
 	if err != nil {
@@ -37,7 +40,10 @@ func NewLoader(options *protocols.ExecuterOptions) (model.WorkflowLoader, error)
 }
 
 func (w *workflowLoader) GetTemplatePathsByTags(templateTags []string) []string {
-	includedTemplates := w.options.Catalog.GetTemplatesPath([]string{w.options.Options.TemplatesDirectory})
+	includedTemplates, errs := w.options.Catalog.GetTemplatesPath([]string{w.options.Options.TemplatesDirectory})
+	for template, err := range errs {
+		gologger.Error().Msgf("Could not find template '%s': %s", template, err)
+	}
 	templatePathMap := w.pathFilter.Match(includedTemplates)
 
 	loadedTemplates := make([]string, 0, len(templatePathMap))
@@ -53,7 +59,10 @@ func (w *workflowLoader) GetTemplatePathsByTags(templateTags []string) []string 
 }
 
 func (w *workflowLoader) GetTemplatePaths(templatesList []string, noValidate bool) []string {
-	includedTemplates := w.options.Catalog.GetTemplatesPath(templatesList)
+	includedTemplates, errs := w.options.Catalog.GetTemplatesPath(templatesList)
+	for template, err := range errs {
+		gologger.Error().Msgf("Could not find template '%s': %s", template, err)
+	}
 	templatesPathMap := w.pathFilter.Match(includedTemplates)
 
 	loadedTemplates := make([]string, 0, len(templatesPathMap))

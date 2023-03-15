@@ -8,8 +8,10 @@ import (
 
 	"github.com/projectdiscovery/nuclei/v2/pkg/output"
 	"github.com/projectdiscovery/nuclei/v2/pkg/reporting/format"
-	"github.com/projectdiscovery/stringsutil"
+	stringsutil "github.com/projectdiscovery/utils/strings"
 )
+
+const indexFileName = "index.md"
 
 type Exporter struct {
 	directory string
@@ -33,6 +35,17 @@ func New(options *Options) (*Exporter, error) {
 		directory = dir
 	}
 	_ = os.MkdirAll(directory, 0755)
+
+	// index generation header
+	dataHeader := "" +
+		"|Hostname/IP|Finding|Severity|\n" +
+		"|-|-|-|\n"
+
+	err := os.WriteFile(filepath.Join(directory, indexFileName), []byte(dataHeader), 0644)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Exporter{options: options, directory: directory}, nil
 }
 
@@ -66,6 +79,18 @@ func (exporter *Exporter) Export(event *output.ResultEvent) error {
 	dataBuilder.WriteString(description)
 	data := dataBuilder.Bytes()
 
+	// index generation
+	file, err := os.OpenFile(filepath.Join(exporter.directory, indexFileName), os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = file.WriteString("|[" + event.Host + "](" + finalFilename + ")" + "|" + event.TemplateID + " " + event.MatcherName + "|" + event.Info.SeverityHolder.Severity.String() + "|\n")
+	if err != nil {
+		return err
+	}
+
 	return os.WriteFile(filepath.Join(exporter.directory, finalFilename), data, 0644)
 }
 
@@ -78,5 +103,5 @@ func sanitizeFilename(filename string) string {
 	if len(filename) > 256 {
 		filename = filename[0:255]
 	}
-	return stringsutil.ReplaceAny(filename, "_", "?", "/", ">", "|", ":", ";", "*", "<", "\"", "'", " ")
+	return stringsutil.ReplaceAll(filename, "_", "?", "/", ">", "|", ":", ";", "*", "<", "\"", "'", " ")
 }

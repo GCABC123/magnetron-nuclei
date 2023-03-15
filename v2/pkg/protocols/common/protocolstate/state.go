@@ -3,10 +3,13 @@ package protocolstate
 import (
 	"fmt"
 	"net"
+	"net/url"
 
 	"github.com/pkg/errors"
+	"golang.org/x/net/proxy"
 
 	"github.com/projectdiscovery/fastdialer/fastdialer"
+	"github.com/projectdiscovery/networkpolicy"
 	"github.com/projectdiscovery/nuclei/v2/pkg/types"
 )
 
@@ -60,12 +63,36 @@ func Init(options *types.Options) error {
 			},
 		}
 	}
+	if types.ProxySocksURL != "" {
+		proxyURL, err := url.Parse(types.ProxySocksURL)
+		if err != nil {
+			return err
+		}
+		var forward *net.Dialer
+		if opts.Dialer != nil {
+			forward = opts.Dialer
+		} else {
+			forward = &net.Dialer{
+				Timeout:   opts.DialerTimeout,
+				KeepAlive: opts.DialerKeepAlive,
+				DualStack: true,
+			}
+		}
+		dialer, err := proxy.FromURL(proxyURL, forward)
+		if err != nil {
+			return err
+		}
+		opts.ProxyDialer = &dialer
+	}
 
 	if options.SystemResolvers {
 		opts.EnableFallback = true
 	}
 	if options.ResolversFile != "" {
 		opts.BaseResolvers = options.InternalResolversList
+	}
+	if options.Sandbox {
+		opts.Deny = append(networkpolicy.DefaultIPv4DenylistRanges, networkpolicy.DefaultIPv6DenylistRanges...)
 	}
 	opts.WithDialerHistory = true
 	opts.WithZTLS = options.ZTLS

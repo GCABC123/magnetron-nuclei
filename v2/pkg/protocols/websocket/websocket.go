@@ -23,6 +23,7 @@ import (
 	"github.com/projectdiscovery/nuclei/v2/pkg/operators/matchers"
 	"github.com/projectdiscovery/nuclei/v2/pkg/output"
 	"github.com/projectdiscovery/nuclei/v2/pkg/protocols"
+	"github.com/projectdiscovery/nuclei/v2/pkg/protocols/common/contextargs"
 	"github.com/projectdiscovery/nuclei/v2/pkg/protocols/common/expressions"
 	"github.com/projectdiscovery/nuclei/v2/pkg/protocols/common/generators"
 	"github.com/projectdiscovery/nuclei/v2/pkg/protocols/common/helpers/eventcreator"
@@ -31,6 +32,7 @@ import (
 	"github.com/projectdiscovery/nuclei/v2/pkg/protocols/network/networkclientpool"
 	templateTypes "github.com/projectdiscovery/nuclei/v2/pkg/templates/types"
 	"github.com/projectdiscovery/nuclei/v2/pkg/types"
+	urlutil "github.com/projectdiscovery/utils/url"
 )
 
 // Request is a request for the Websocket protocol
@@ -103,7 +105,7 @@ func (request *Request) Compile(options *protocols.ExecuterOptions) error {
 	request.dialer = client
 
 	if len(request.Payloads) > 0 {
-		request.generator, err = generators.New(request.Payloads, request.AttackType.Value, request.options.TemplatePath, options.Catalog)
+		request.generator, err = generators.New(request.Payloads, request.AttackType.Value, request.options.TemplatePath, request.options.Options.TemplatesDirectory, request.options.Options.Sandbox, options.Catalog, options.Options.AttackType)
 		if err != nil {
 			return errors.Wrap(err, "could not parse payloads")
 		}
@@ -135,8 +137,8 @@ func (request *Request) GetID() string {
 }
 
 // ExecuteWithResults executes the protocol requests and returns results instead of writing them.
-func (request *Request) ExecuteWithResults(input string, dynamicValues, previous output.InternalEvent, callback protocols.OutputEventCallback) error {
-	hostname, err := getAddress(input)
+func (request *Request) ExecuteWithResults(input *contextargs.Context, dynamicValues, previous output.InternalEvent, callback protocols.OutputEventCallback) error {
+	hostname, err := getAddress(input.MetaInput.Input)
 	if err != nil {
 		return err
 	}
@@ -149,13 +151,13 @@ func (request *Request) ExecuteWithResults(input string, dynamicValues, previous
 			if !ok {
 				break
 			}
-			if err := request.executeRequestWithPayloads(input, hostname, value, previous, callback); err != nil {
+			if err := request.executeRequestWithPayloads(input.MetaInput.Input, hostname, value, previous, callback); err != nil {
 				return err
 			}
 		}
 	} else {
 		value := make(map[string]interface{})
-		if err := request.executeRequestWithPayloads(input, hostname, value, previous, callback); err != nil {
+		if err := request.executeRequestWithPayloads(input.MetaInput.Input, hostname, value, previous, callback); err != nil {
 			return err
 		}
 	}
@@ -178,7 +180,7 @@ func (request *Request) executeRequestWithPayloads(input, hostname string, dynam
 	payloadValues["Host"] = parsed.Hostname()
 	payloadValues["Scheme"] = parsed.Scheme
 	requestPath := parsed.Path
-	if values := parsed.Query(); len(values) > 0 {
+	if values := urlutil.GetParams(parsed.Query()); len(values) > 0 {
 		requestPath = requestPath + "?" + values.Encode()
 	}
 	payloadValues["Path"] = requestPath
@@ -208,7 +210,7 @@ func (request *Request) executeRequestWithPayloads(input, hostname string, dynam
 		TLSConfig: tlsConfig,
 	}
 
-	if request.options.Options.Debug || request.options.Options.DebugRequests {
+	if vardump.EnableVarDump {
 		gologger.Debug().Msgf("Protocol request variables: \n%s\n", vardump.DumpVariables(payloadValues))
 	}
 

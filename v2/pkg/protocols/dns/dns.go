@@ -106,6 +106,11 @@ func (request *Request) GetID() string {
 	return request.ID
 }
 
+// Options returns executer options for http request
+func (r *Request) Options() *protocols.ExecuterOptions {
+	return r.options
+}
+
 // Compile compiles the protocol request for further execution.
 func (request *Request) Compile(options *protocols.ExecuterOptions) error {
 	if request.Retries == 0 {
@@ -221,6 +226,8 @@ func questionTypeToInt(questionType string) uint16 {
 		question = dns.TypeAAAA
 	case "CAA":
 		question = dns.TypeCAA
+	case "TLSA":
+		question = dns.TypeTLSA
 	}
 	return question
 }

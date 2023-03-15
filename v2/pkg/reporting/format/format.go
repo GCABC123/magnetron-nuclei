@@ -14,7 +14,6 @@ import (
 	"github.com/projectdiscovery/nuclei/v2/pkg/types"
 )
 
-
 // Summary returns a formatted built one line summary of the event
 func Summary(event *output.ResultEvent) string {
 	template := GetMatchedTemplate(event)
@@ -161,8 +160,8 @@ func ToMarkdownTableString(templateInfo *model.Info) string {
 	fields.Set("Authors", templateInfo.Authors.String())
 	fields.Set("Tags", templateInfo.Tags.String())
 	fields.Set("Severity", templateInfo.SeverityHolder.Severity.String())
-	fields.Set("Description", templateInfo.Description)
-	fields.Set("Remediation", templateInfo.Remediation)
+	fields.Set("Description", lineBreakToHTML(templateInfo.Description))
+	fields.Set("Remediation", lineBreakToHTML(templateInfo.Remediation))
 
 	classification := templateInfo.Classification
 	if classification != nil {
@@ -179,7 +178,7 @@ func ToMarkdownTableString(templateInfo *model.Info) string {
 		insertionOrderedStringMap.ForEach(func(key string, value interface{}) {
 			switch value := value.(type) {
 			case string:
-				if utils.IsNotBlank(value) {
+				if !utils.IsBlank(value) {
 					builder.WriteString(fmt.Sprintf("| %s | %s |\n", key, value))
 				}
 			}
@@ -239,4 +238,8 @@ func createMarkdownCodeBlock(title string, content string, language string) stri
 
 func createBoldMarkdown(value string) string {
 	return "**" + value + "**"
+}
+
+func lineBreakToHTML(text string) string {
+	return strings.ReplaceAll(text, "\n", "<br>")
 }

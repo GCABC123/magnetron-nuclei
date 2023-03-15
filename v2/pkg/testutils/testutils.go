@@ -1,7 +1,10 @@
 package testutils
 
 import (
-	"go.uber.org/ratelimit"
+	"context"
+	"time"
+
+	"github.com/projectdiscovery/ratelimit"
 
 	"github.com/logrusorgru/aurora"
 
@@ -58,11 +61,13 @@ var DefaultOptions = &types.Options{
 	Templates:                  []string{},
 	ExcludedTemplates:          []string{},
 	CustomHeaders:              []string{},
-	InteractshURL:              "https://oast.me",
+	InteractshURL:              "https://oast.fun",
 	InteractionsCacheSize:      5000,
 	InteractionsEviction:       60,
 	InteractionsCoolDownPeriod: 5,
 	InteractionsPollDuration:   5,
+	GithubTemplateRepo:         []string{},
+	GithubToken:                "",
 }
 
 // TemplateInfo contains info for a mock executed template.
@@ -74,7 +79,7 @@ type TemplateInfo struct {
 
 // NewMockExecuterOptions creates a new mock executeroptions struct
 func NewMockExecuterOptions(options *types.Options, info *TemplateInfo) *protocols.ExecuterOptions {
-	progressImpl, _ := progress.NewStatsTicker(0, false, false, false, 0)
+	progressImpl, _ := progress.NewStatsTicker(0, false, false, false, false, 0)
 	executerOpts := &protocols.ExecuterOptions{
 		TemplateID:   info.ID,
 		TemplateInfo: info.Info,
@@ -86,7 +91,7 @@ func NewMockExecuterOptions(options *types.Options, info *TemplateInfo) *protoco
 		IssuesClient: nil,
 		Browser:      nil,
 		Catalog:      disk.NewCatalog(options.TemplatesDirectory),
-		RateLimiter:  ratelimit.New(options.RateLimit),
+		RateLimiter:  ratelimit.New(context.Background(), uint(options.RateLimit), time.Second),
 	}
 	return executerOpts
 }
@@ -153,6 +158,9 @@ func (m *MockProgressClient) AddToTotal(delta int64) {}
 
 // IncrementRequests increments the requests counter by 1.
 func (m *MockProgressClient) IncrementRequests() {}
+
+// SetRequests sets the counter by incrementing it with a delta
+func (m *MockProgressClient) SetRequests(count uint64) {}
 
 // IncrementMatched increments the matched counter by 1.
 func (m *MockProgressClient) IncrementMatched() {}
